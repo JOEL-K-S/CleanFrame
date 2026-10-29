@@ -1022,13 +1022,32 @@
 
   /* ---------- Dispatch ---------- */
   function norm() { var t = top(), v = V[t.id]; if (v.norm) v.norm(t); }
+  var DOCK_IDLE_MS = 8000, dockTimer = 0;
+  function dockIdleApplies() {
+    var w = wall(S.shown ? S.shown.wall : S.c.wall);
+    return !document.hidden && top().id === 'home' && S.c.layout === 'dock' && S.c.bg === 'photo' && !!(w && w.usb);
+  }
+  function scheduleDock() {
+    clearTimeout(dockTimer); dockTimer = 0;
+    if (!dockIdleApplies()) { S.dockAway = false; return; }
+    if (S.dockAway) return;
+    dockTimer = setTimeout(function () { dockTimer = 0; if (dockIdleApplies()) { S.dockAway = true; render(); } }, DOCK_IDLE_MS);
+  }
+  function wakeDock() {
+    var was = S.dockAway;
+    S.dockAway = false; scheduleDock();
+    if (was) render();
+    return was;
+  }
   function press(k) {
+    if (wakeDock()) return;
     norm();
     var t = top();
     V[t.id].key(t, k);
     norm();
     render();
     syncRotation();
+    scheduleDock();
   }
 
   /* ---------- Rendering ---------- */
@@ -1076,7 +1095,7 @@
   function render() {
     var t = top(), sheet = !!V[t.id].sheet, shown = wall(S.shown ? S.shown.wall : S.c.wall), palette = ADAPTIVE_INK[shown.id];
     var adaptive = applyAdaptiveInk(palette), tr = adaptive && palette.tr ? palette.tr.pol : shown.ut.tr, br = adaptive && palette.br ? palette.br.pol : shown.ut.br;
-    stage.className = 'stage bg-' + S.c.bg + ' l-' + S.c.layout + ' v-' + S.variant + ' m-' + (materialApplies({ bg: S.c.bg, layout: S.c.layout, focus: S.c.focus, wall: shown.id }) ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '');
+    stage.className = 'stage bg-' + S.c.bg + ' l-' + S.c.layout + ' v-' + S.variant + ' m-' + (materialApplies({ bg: S.c.bg, layout: S.c.layout, focus: S.c.focus, wall: shown.id }) ? S.c.material : 'none') + ' f-' + S.c.focus + ' a-' + S.c.apps + ' u-' + S.c.controls + ' g-' + S.geom + ' tone-' + shown.tone + ' tr-' + tr + ' br-' + br + wallClasses(shown) + inkRungClasses(palette, adaptive) + ' at-' + t.id + ' font-' + homeFont() + (homeFont() !== 'manrope' ? ' font-custom' : '') + (S.fontSwitch ? ' is-font-switch' : '') + (adaptive ? ' has-adaptive-ink adaptive-tl-' + palette.tl.pol : '') + (!adaptive && shown.clockInk ? ' has-clock-ink' : '') + (!adaptive && shown.dockClockInk ? ' has-dock-clock-ink' : '') + (registeredMaterial(shown.id) ? ' registered-material' : '') + (sheet ? ' is-sheet' : '') + (S.reflow ? ' is-reflow' : '') + (S.dockAway && dockIdleApplies() ? ' dock-away' : '');
     if (!adaptive && shown.clockInk) stage.style.setProperty('--clock-ink', shown.clockInk);
     else stage.style.removeProperty('--clock-ink');
     if (!adaptive && shown.dockClockInk) stage.style.setProperty('--dock-clock-ink', shown.dockClockInk);
@@ -1807,6 +1826,7 @@
   }
   function resetRotation() { pauseRotation(); activeMs = 0; rotationKey = ''; }
   function syncRotation() {
+    scheduleDock();
     var key = S.c.wall + '|' + S.c.mode;
     pauseRotation();
     if (key !== rotationKey) { activeMs = 0; rotationKey = key; }
@@ -1892,6 +1912,7 @@
     if (k === 'ok' || k === 'back') { if (ev.repeat || heldKeys[code]) return; heldKeys[code] = true; }
     press(k);
   });
+  document.addEventListener('mousemove', function () { if (S.dockAway) wakeDock(); });
   document.addEventListener('keyup', function (ev) { delete heldKeys[ev.keyCode]; });
   window.addEventListener('blur', function () { heldKeys = {}; });
   window.addEventListener('focus', function () { release(); focusStage(); after(); updateClock(); });
