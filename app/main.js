@@ -93,6 +93,57 @@
   /* ---------- Helpers ---------- */
   function app(id) { for (var i = 0; i < APPS.length; i++) if (APPS[i].id === id) return APPS[i]; return null; }
   function wall(id) { for (var i = 0; i < WALLS.length; i++) if (WALLS[i].id === id) return WALLS[i]; return null; }
+  /* ---------- USB wallpapers (Tizen removable storage, read-only) ---------- */
+  var USB_MAX = 12, USB_IMAGE = /\.(jpe?g|png)$/i, usbScanning = false;
+  function wallFile(id, suffix) { var w = wall(id); return w && w.url ? w.url : WP + id + suffix; }
+  function scanUsb(done) {
+    var fsApi = window.tizen && window.tizen.filesystem, found = [], pending = 0, finished = false, timer;
+    function finish() { if (finished) return; finished = true; clearTimeout(timer); done(found); }
+    function settle() { if (--pending <= 0) finish(); }
+    function listDir(dir, depth) {
+      pending++;
+      try {
+        dir.listFiles(function (files) {
+          files.forEach(function (f) {
+            if (!f || !f.name || f.name.charAt(0) === '.') return;
+            if (f.isDirectory && depth < 1) { listDir(f, depth + 1); return; }
+            if (f.isFile && USB_IMAGE.test(f.name) && found.length < USB_MAX) {
+              found.push({ id: 'usb:' + f.name, name: f.name.replace(/\.[^.]+$/, ''), url: f.toURI(), usb: true,
+                tone: 'light', ut: { tr: 'mist', br: 'mist' }, frostVeil: .30 });
+            }
+          });
+          settle();
+        }, settle);
+      } catch (e) { settle(); }
+    }
+    if (!fsApi) { done([]); return; }
+    timer = setTimeout(finish, 6000);
+    try {
+      fsApi.listStorages(function (storages) {
+        var usb = storages.filter(function (st) { return st.type === 'EXTERNAL' && st.state === 'MOUNTED'; });
+        if (!usb.length) { finish(); return; }
+        pending = usb.length;
+        usb.forEach(function (st) {
+          try { fsApi.resolve(st.label, function (dir) { pending--; listDir(dir, 0); if (pending <= 0 && !found.length) finish(); }, settle, 'r'); }
+          catch (e) { settle(); }
+        });
+      }, finish);
+    } catch (e) { finish(); }
+  }
+  function refreshUsb(done) {
+    if (usbScanning) return;
+    usbScanning = true;
+    scanUsb(function (files) {
+      var keep = [S.c && S.c.wall, S.shown && S.shown.wall], seen = {}, list = [];
+      usbScanning = false;
+      WALLS.forEach(function (w) { if (!w.usb) list.push(w); });
+      files.forEach(function (w) { if (!seen[w.id]) { seen[w.id] = 1; list.push(w); } });
+      WALLS.forEach(function (w) { if (w.usb && !seen[w.id] && keep.indexOf(w.id) >= 0) list.push(w); });
+      WALLS.length = 0;
+      list.forEach(function (w) { WALLS.push(w); });
+      if (done) done();
+    });
+  }
   function wallIndex(id) { for (var i = 0; i < WALLS.length; i++) if (WALLS[i].id === id) return i; return 0; }
   function frostClass(w) { var i = [.12, .20, .30, .36, .44].indexOf(w.frostVeil); return i > 0 ? ' fv-' + (i + 1) : ''; }
   function wallClasses(w) { return frostClass(w) + (w.listColumn ? ' lc-' + w.listColumn : '') + (w.dockQuiet ? ' db-quiet' : '') + (w.clockMist ? ' tl-mist' : ''); }
@@ -362,7 +413,8 @@
     return out;
   }
   function initialise() {
-    var saved = load(), initial; S.c = clean(saved); initial = next(S.c.home.slice(), S.c.recent.slice());
+    var saved = load(), initial, want = saved && (saved.look && saved.look.wall || saved.wallpaper); S.c = clean(saved);
+    S.usbWant = typeof want === 'string' && want.indexOf('usb:') === 0 ? want : null; initial = next(S.c.home.slice(), S.c.recent.slice());
     S.stack = [{ id: 'home', f: { zone: 'apps', u: 0 } }];
     S.sel = S.c.lastApp; S.selIdx = S.c.home.indexOf(S.sel);
     if (saved && initial.mode === 'open') initial.wall = WALLS[(wallIndex(initial.wall) + 1) % WALLS.length].id;
@@ -525,6 +577,12 @@
     S.err = null; S.wallError = null;
     push({ id: 'wallpaper', i: i, top: clamp(i - 2, 0, Math.max(0, WALLS.length - WALL_VISIBLE)), f: { zone: 'photo' },
       previewTimer: 0, previewDue: null, applyPending: null, failedId: null, failedApply: false, retryBundle: null });
+    var t = top(), candidate = WALLS[i].id;
+    refreshUsb(function () {
+      if (top() !== t) return;
+      t.i = wallIndex(candidate);
+      V.wallpaper.norm(t); render();
+    });
   }
   function isSettingsDetail(t) { return t.id === 'appearance' || t.id === 'wallpaper'; }
 
@@ -1402,7 +1460,7 @@
           var swatch = item.axis === 'bg', body = '';
           if (swatch || item.thumbnail) body += item.value === 'light' || item.value === 'dark'
             ? '<span class="setting-swatch swatch-' + item.value + '" aria-hidden="true"></span>'
-            : '<img class="setting-swatch" src="' + WP + S.c.wall + '-thumb.jpg" alt="">';
+            : '<img class="setting-swatch" src="' + wallFile(S.c.wall, '-thumb.jpg') + '" alt="">';
           body += '<span class="setting-copy"><span class="setting-name">' + esc(item.label) + '</span>'
             + (item.description ? '<span class="setting-description">' + esc(item.description) + '</span>' : '') + '</span>';
           if (!item.axis) body += icon('right', 'setting-forward');
@@ -1429,7 +1487,7 @@
     var rows = appearanceRows.querySelector('.wallpaper-rows'), shown = wall(S.wallShown) || wall(S.c.wall), candidate = WALLS[t.i], status, note, hint;
     keyed(rows, WALLS.map(function (w) { return { key: w.id, wall: w }; }), function (row, item, i) {
       var visible = i >= t.top && i < t.top + WALL_VISIBLE, w = item.wall, image;
-      setContent(row, w.id + '|' + visible, '<span class="wallpaper-thumb">' + (visible ? '<img src="' + WP + w.id + '-thumb.jpg" alt="">' : '') + '</span><span class="setting-copy"><span class="setting-name">' + esc(w.name) + '</span></span><span class="setting-tick" aria-hidden="true"></span>');
+      setContent(row, w.id + '|' + visible, '<span class="wallpaper-thumb">' + (visible ? '<img src="' + wallFile(w.id, '-thumb.jpg') + '" alt="">' : '') + '</span><span class="setting-copy"><span class="setting-name">' + esc(w.name) + '</span></span><span class="setting-tick" aria-hidden="true"></span>');
       row.className = 'setting-choice wallpaper-choice' + (t.f.zone === 'photo' && t.i === i ? ' is-focus' : '') + (w.id === S.c.wall ? ' is-applied' : '');
       row.style.transform = 'translate3d(0,' + (i * WALL_ROW) + 'px,0)'; row.style.visibility = visible ? 'visible' : 'hidden';
       row.setAttribute('role', 'radio'); row.setAttribute('tabindex', '-1'); row.setAttribute('aria-label', w.name);
@@ -1617,9 +1675,9 @@
 
   /* ---------- Atomic appearance bundles ---------- */
   var wallToken = 0, committedBundle = null, reflowToken = 0, fontSwitchToken = 0;
-  function registeredMaterial(id) { return S.c.bg === 'photo' && S.c.material === 'soft' && !!wall(id); }
-  function matSrc(id, material) { return 'assets/materials/' + id + (material === 'soft' ? '-study-soft.jpg' : material === 'tint' ? '-field-clear.jpg' : '-field-frost.jpg'); }
-  function fieldSrc(id, material) { return 'assets/materials/' + id + (material === 'soft' ? '-field-blur.jpg' : material === 'tint' ? '-field-clear.jpg' : '-field-frost.jpg'); }
+  function registeredMaterial(id) { return S.c.bg === 'photo' && S.c.material === 'soft' && !!wall(id) && !wall(id).usb; }
+  function matSrc(id, material) { var w = wall(id); if (w && w.url) return w.url; return 'assets/materials/' + id + (material === 'soft' ? '-study-soft.jpg' : material === 'tint' ? '-field-clear.jpg' : '-field-frost.jpg'); }
+  function fieldSrc(id, material) { var w = wall(id); if (w && w.url) return w.url; return 'assets/materials/' + id + (material === 'soft' ? '-field-blur.jpg' : material === 'tint' ? '-field-clear.jpg' : '-field-frost.jpg'); }
   function makeImg(cls, src) { var im = document.createElement('img'); im.className = cls; im.alt = ''; im._src = src; im.src = src; return im; }
   function whenReady(im, done) {
     var fin = false, timer = setTimeout(function () { finish(false); }, 8000);
@@ -1631,7 +1689,7 @@
   function swapImg(k, im) { var old = IMG[k]; if (old === im) return; im.style.cssText = old.style.cssText; if (old.id) im.id = old.id; old.parentNode.replaceChild(im, old); IMG[k] = im; }
   function bundleKey(look) { return look.wall + '|' + look.material; }
   function loadBundle(look, token, done) {
-    var imgs = { photo: makeImg('photo', WP + look.wall + '.jpg'), bg: makeImg('sheet-bg', WP + look.wall + '-panel.jpg') }, keys, left, allOk = true;
+    var imgs = { photo: makeImg('photo', wallFile(look.wall, '.jpg')), bg: makeImg('sheet-bg', wallFile(look.wall, '-panel.jpg')) }, keys, left, allOk = true;
     imgs.mat = makeImg('mat-img', matSrc(look.wall, look.material));
     imgs.field = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
     imgs.fieldAlt = makeImg('ph-field-img', fieldSrc(look.wall, look.material));
@@ -1878,5 +1936,8 @@
   cueL.innerHTML = icon('left'); cueR.innerHTML = icon('right');
   initialise();
   setLook({}, { transient: true, startup: true });
+  if (S.usbWant) refreshUsb(function () {
+    if (wall(S.usbWant) && S.c.wall !== S.usbWant && top().id === 'home' && !S.pending) setLook({ wall: S.usbWant }, { row: 'bg' });
+  });
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation();
 })();
