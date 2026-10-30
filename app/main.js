@@ -1961,4 +1961,12 @@
     if (wall(S.usbWant) && S.c.wall !== S.usbWant && top().id === 'home' && !S.pending) setLook({ wall: S.usbWant }, { row: 'bg' });
   });
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation();
+  (function () {
+    var splash = document.getElementById('splash');
+    if (!splash) return;
+    setTimeout(function () {
+      splash.className += ' is-done';
+      setTimeout(function () { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 700);
+    }, 1800);
+  })();
 })();
