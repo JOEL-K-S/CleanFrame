@@ -397,7 +397,8 @@
       focus: pick(modern.focus, LOOK_VALUES.focus, legacyList ? 'type' : 'glass'), material: pick(modern.material, LOOK_VALUES.material, 'soft'),
       font: pick(modern.font, LOOK_VALUES.font, 'manrope'), wall: wall(modern.wall || s.wallpaper) ? modern.wall || s.wallpaper : WALLS[0].id,
       home: h, recent: recent, lastApp: h.indexOf(s.lastApp) >= 0 ? s.lastApp : h[0],
-      mode: pick(s.mode, MODES.map(function (m) { return m.id; }), 'fixed'), usb: s.usb === 'on' ? 'on' : 'off'
+      mode: pick(s.mode, MODES.map(function (m) { return m.id; }), 'fixed'), usb: s.usb === 'on' ? 'on' : 'off',
+      usbWall: typeof s.usbWall === 'string' && s.usbWall.indexOf('usb:') === 0 ? s.usbWall : typeof s.wallpaper === 'string' && s.wallpaper.indexOf('usb:') === 0 ? s.wallpaper : ''
     };
   }
   function serialise(c) {
@@ -413,8 +414,8 @@
     return out;
   }
   function initialise() {
-    var saved = load(), initial, want = saved && (saved.look && saved.look.wall || saved.wallpaper); S.c = clean(saved);
-    S.usbWant = S.c.usb === 'on' && typeof want === 'string' && want.indexOf('usb:') === 0 ? want : null; initial = next(S.c.home.slice(), S.c.recent.slice());
+    var saved = load(), initial; S.c = clean(saved);
+    S.usbWant = S.c.usb === 'on' && S.c.mode === 'fixed' && S.c.usbWall ? S.c.usbWall : null; initial = next(S.c.home.slice(), S.c.recent.slice());
     S.stack = [{ id: 'home', f: { zone: 'apps', u: 0 } }];
     S.sel = S.c.lastApp; S.selIdx = S.c.home.indexOf(S.sel);
     if (saved && initial.mode === 'open') initial.wall = WALLS[(wallIndex(initial.wall) + 1) % WALLS.length].id;
@@ -423,7 +424,7 @@
   }
   function clearSession() { S.undo = []; S.removedAt = {}; S.note = null; S.err = null; }
   function begin() { S.note = null; }
-  function next(home, recent) { var c = lookOf(S.c); c.home = home; c.recent = recent; c.lastApp = S.c.lastApp; c.mode = S.c.mode; c.usb = S.c.usb; return c; }
+  function next(home, recent) { var c = lookOf(S.c); c.home = home; c.recent = recent; c.lastApp = S.c.lastApp; c.mode = S.c.mode; c.usb = S.c.usb; c.usbWall = S.c.usbWall; return c; }
   function snap() { return { home: S.c.home.slice(), recent: S.c.recent.slice() }; }
   function pushRecent(list, id) { return [id].concat(without(list, id)).slice(0, 5); }
   function write(c, label) {
@@ -1764,6 +1765,8 @@
     function finish(bundle) {
       var c = next(S.c.home.slice(), S.c.recent.slice()), fontChanged = target.font !== S.c.font, reflow = target.apps !== S.c.apps || target.controls !== S.c.controls || fontChanged, frame, fontFrame;
       Object.keys(target).forEach(function (key) { c[key] = target[key]; });
+      if (wall(c.wall).usb) c.usbWall = c.wall;
+      else if (c.wall !== S.c.wall && opts.row !== 'usb') c.usbWall = '';
       S.pending = null; S.wallPending = null;
       if (!opts.transient && changed && !write(c, 'Appearance')) { S.lookError = { type: 'save', patch: changes, row: opts.row || S.appearanceFocus, transient: false }; render(); syncRotation(); return; }
       if (opts.transient) S.c = c;
