@@ -47,7 +47,7 @@
   var LOOK_KEYS = ['bg', 'layout', 'apps', 'font', 'controls', 'focus', 'material'];
   var LOOK_VALUES = { bg: ['dark', 'light', 'photo'], layout: ['list', 'dock'], apps: ['icons', 'both', 'text'], font: Object.keys(FONTS).filter(function (id) { return id === 'manrope' || PRIVATE_FONTS.indexOf(id) >= 0; }), controls: ['icons', 'both', 'text'], focus: ['type', 'glass'], material: ['soft', 'frost', 'tint'] };
   var LOOK_NAMES = { bg: 'Background', layout: 'Layout', apps: 'Apps', font: 'Font', controls: 'Home controls', focus: 'Focus', material: 'Material' };
-  var VALUE_NAMES = { dark: 'Dark', light: 'Light', photo: 'Photo', list: 'List', dock: 'Dock', type: 'Type', glass: 'Glass', soft: 'Soft', frost: 'Frost', tint: 'Clear tint', icons: 'Icons', both: 'Icons and text', text: 'Text' };
+  var VALUE_NAMES = { dark: 'Dark', light: 'Light', photo: 'Photo', list: 'List', dock: 'Dock', type: 'Type', glass: 'Glass', soft: 'Soft', frost: 'Frost', tint: 'Clear tint', icons: 'Icons', both: 'Icons and text', text: 'Text', off: 'Off', on: 'On' };
   var UTIL = { art: ['Art Mode', 'art'], apps: ['All apps', 'apps'], arrange: ['Arrange', 'arrange'], settings: ['Settings', 'settings'] };
   var MSG = {
     leave: { title: 'Leave Home?', line: 'Open Samsung Home?', note: '', actions: [['stay', 'Stay'], ['samsung', 'Samsung Home']] }
@@ -116,7 +116,7 @@
         }, settle);
       } catch (e) { settle(); }
     }
-    if (!fsApi) { done([]); return; }
+    if (!fsApi || S.c.usb !== 'on') { done([]); return; }
     timer = setTimeout(finish, 6000);
     try {
       fsApi.listStorages(function (storages) {
@@ -397,7 +397,7 @@
       focus: pick(modern.focus, LOOK_VALUES.focus, legacyList ? 'type' : 'glass'), material: pick(modern.material, LOOK_VALUES.material, 'soft'),
       font: pick(modern.font, LOOK_VALUES.font, 'manrope'), wall: wall(modern.wall || s.wallpaper) ? modern.wall || s.wallpaper : WALLS[0].id,
       home: h, recent: recent, lastApp: h.indexOf(s.lastApp) >= 0 ? s.lastApp : h[0],
-      mode: pick(s.mode, MODES.map(function (m) { return m.id; }), 'fixed')
+      mode: pick(s.mode, MODES.map(function (m) { return m.id; }), 'fixed'), usb: s.usb === 'on' ? 'on' : 'off'
     };
   }
   function serialise(c) {
@@ -414,7 +414,7 @@
   }
   function initialise() {
     var saved = load(), initial, want = saved && (saved.look && saved.look.wall || saved.wallpaper); S.c = clean(saved);
-    S.usbWant = typeof want === 'string' && want.indexOf('usb:') === 0 ? want : null; initial = next(S.c.home.slice(), S.c.recent.slice());
+    S.usbWant = S.c.usb === 'on' && typeof want === 'string' && want.indexOf('usb:') === 0 ? want : null; initial = next(S.c.home.slice(), S.c.recent.slice());
     S.stack = [{ id: 'home', f: { zone: 'apps', u: 0 } }];
     S.sel = S.c.lastApp; S.selIdx = S.c.home.indexOf(S.sel);
     if (saved && initial.mode === 'open') initial.wall = WALLS[(wallIndex(initial.wall) + 1) % WALLS.length].id;
@@ -423,7 +423,7 @@
   }
   function clearSession() { S.undo = []; S.removedAt = {}; S.note = null; S.err = null; }
   function begin() { S.note = null; }
-  function next(home, recent) { var c = lookOf(S.c); c.home = home; c.recent = recent; c.lastApp = S.c.lastApp; c.mode = S.c.mode; return c; }
+  function next(home, recent) { var c = lookOf(S.c); c.home = home; c.recent = recent; c.lastApp = S.c.lastApp; c.mode = S.c.mode; c.usb = S.c.usb; return c; }
   function snap() { return { home: S.c.home.slice(), recent: S.c.recent.slice() }; }
   function pushRecent(list, id) { return [id].concat(without(list, id)).slice(0, 5); }
   function write(c, label) {
@@ -910,6 +910,7 @@
     if (t.group === 'background') return [
       { id: 'bg', title: 'Background type', items: options('bg', ['photo', 'light', 'dark']) },
       { id: 'wall', title: 'Wallpaper', items: [{ action: 'background.wallpaper', label: wall(S.c.wall).name, thumbnail: true, disabled: flat }] },
+      { id: 'usb', title: 'USB wallpapers', horizontal: true, items: options('usb', ['off', 'on']) },
       { id: 'rotation', title: 'Rotation', items: [{ action: 'background.rotation', label: mode().name, disabled: flat }], reason: flat ? 'Choose Photo to use wallpaper and rotation.' : '' }
     ];
     if (t.group === 'layout') return [
@@ -959,6 +960,17 @@
     c = next(S.c.home.slice(), S.c.recent.slice()); c.mode = value;
     if (!write(c, 'Wallpaper rotation')) S.lookError = { type: 'save', patch: { mode: value }, row: 'mode', transient: false };
   }
+  function applyUsb(value) {
+    var c, fallback;
+    S.err = null; S.lookError = null;
+    if (value === S.c.usb) return;
+    c = next(S.c.home.slice(), S.c.recent.slice()); c.usb = value;
+    if (!write(c, 'USB wallpapers')) { S.lookError = { type: 'save', patch: { usb: value }, row: 'usb', transient: false }; return; }
+    if (value === 'on') { refreshUsb(function () { render(); }); return; }
+    fallback = WALLS.filter(function (w) { return !w.usb; })[0];
+    if (wall(S.c.wall).usb && fallback) setLook({ wall: fallback.id }, { row: 'usb' });
+    refreshUsb(function () { render(); });
+  }
   function detailBack() { cancelLook(); S.err = null; pop(); }
   function detailOk(t, item) {
     var patch = {}, error = S.lookError;
@@ -967,8 +979,10 @@
     if (item.action === 'settings.retry') {
       if (error && error.patch[error.row] !== undefined) detailFocus(t, choice(error.row, error.patch[error.row]), 0);
       if (error && error.row === 'mode') applyRotation(error.patch.mode);
+      else if (error && error.row === 'usb') applyUsb(error.patch.usb);
       else if (error) setLook(error.patch, { row: error.row });
     } else if (item.axis === 'mode') applyRotation(item.value);
+    else if (item.axis === 'usb') applyUsb(item.value);
     else if (item.axis) { patch[item.axis] = item.value; setLook(patch, { row: item.axis }); }
     else if (item.action === 'background.wallpaper') openWallpaper();
     else if (item.action === 'background.rotation') openAppearance('rotation');
