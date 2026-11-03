@@ -24,7 +24,14 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 .stage .ico{fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;flex:none}
 .home{position:absolute;left:0;top:0;width:1920px;height:1080px}
 .bg{position:absolute;left:0;top:0;width:1920px;height:1080px}
-.photo{position:absolute;left:0;top:0;width:1920px;height:1080px;max-width:none;object-fit:cover;object-position:50% 50%}
+.photo{position:absolute;left:0;top:0;width:1920px;height:1080px;max-width:none;object-fit:cover;object-position:50% 50%;transition:opacity 1.8s cubic-bezier(.4,0,.2,1);will-change:opacity,transform}
+.photo.photo-b{opacity:0;pointer-events:none}
+.photo.is-active{opacity:1;pointer-events:auto}
+.photo.is-hidden{opacity:0;pointer-events:none}
+.photo.motion-1{animation:kenburns-slow-1 24s ease-in-out infinite alternate}
+.photo.motion-2{animation:kenburns-slow-2 24s ease-in-out infinite alternate}
+@keyframes kenburns-slow-1{0%{transform:scale(1.0) translate3d(0,0,0)}50%{transform:scale(1.06) translate3d(-1.5%,-1%,0)}100%{transform:scale(1.02) translate3d(1%,.5%,0)}}
+@keyframes kenburns-slow-2{0%{transform:scale(1.05) translate3d(1%,.8%,0)}50%{transform:scale(1.0) translate3d(-1%,-.6%,0)}100%{transform:scale(1.07) translate3d(0,-1.2%,0)}}
 .scrim{position:absolute;left:0;top:560px;width:1920px;height:520px;background:linear-gradient(to bottom,rgba(4,10,12,0),rgba(4,10,12,.42) 70%,rgba(4,10,12,.52))}
 .shade{position:absolute;left:0;top:0;width:1920px;height:300px;background:linear-gradient(to bottom,rgba(4,10,12,.32),rgba(4,10,12,.14) 150px,rgba(4,10,12,0))}
 .tone-light .shade{background:linear-gradient(to bottom,rgba(4,10,12,.42),rgba(4,10,12,.2) 160px,rgba(4,10,12,0))}
@@ -602,10 +609,16 @@ html,body{width:100%;height:100%;overflow:hidden;background:#000}
 @keyframes font-in{from{opacity:0}}
 @media(prefers-reduced-motion:reduce){.is-font-switch .home .ph-name,.is-font-switch .home .clock,.is-font-switch .home .tile .label,.is-font-switch .home .u-label,.is-font-switch .home .app-focus-name,.is-font-switch .home .util-focus-label{animation-duration:120ms}}
 
-.splash{position:absolute;left:0;top:0;width:1920px;height:1080px;z-index:1000;background:#0d0d0d;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:1;transition:opacity .6s ease;pointer-events:none}
+.splash{position:absolute;left:0;top:0;width:1920px;height:1080px;z-index:1000;background:#0d0d0d;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:1;transition:opacity .7s cubic-bezier(.2,.7,.2,1);pointer-events:none}
 .splash.is-done{opacity:0}
-.splash-mark{color:#f6f1e7;font-size:72px;font-weight:300;letter-spacing:.14em;animation:splash-in 1s ease both}
-.splash-bar{width:240px;height:3px;margin-top:48px;background:rgba(246,241,231,.18);overflow:hidden}
-.splash-bar i{display:block;width:100%;height:100%;background:#f6f1e7;transform:translateX(-100%);animation:splash-load 1.6s ease-in-out forwards}
+.splash-mark{color:#f6f1e7;font-size:72px;font-weight:300;letter-spacing:.14em;opacity:0;animation:splash-in .8s .1s ease both}
+.splash-bar{width:240px;height:3px;margin-top:48px;background:rgba(246,241,231,.18);border-radius:1.5px;overflow:hidden;opacity:0;animation:splash-in .6s .5s ease both}
+.splash-bar i{display:block;width:100%;height:100%;background:#f6f1e7;border-radius:1.5px;animation:splash-shimmer 1.8s cubic-bezier(.4,0,.2,1) infinite}
+.splash.is-ready .splash-bar i{animation:splash-fill .5s cubic-bezier(.2,.7,.2,1) forwards}
+.splash-error{color:rgba(246,241,231,.72);font-size:30px;font-weight:500;letter-spacing:-.2px;margin-top:40px;opacity:0;transition:opacity .4s ease}
+.splash.is-error .splash-error{opacity:1}
+.splash.is-error .splash-bar i{animation:none;background:rgba(232,179,106,.6);transform:translateX(0)}
 @keyframes splash-in{from{opacity:0}to{opacity:1}}
-@keyframes splash-load{to{transform:translateX(0)}}
+@keyframes splash-shimmer{0%{transform:translateX(-100%)}50%{transform:translateX(20%)}100%{transform:translateX(100%)}}
+@keyframes splash-fill{to{transform:translateX(0)}}
+@media(prefers-reduced-motion:reduce){.splash-bar i{animation:none;transform:translateX(-40%)}}

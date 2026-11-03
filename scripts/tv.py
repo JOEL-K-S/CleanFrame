@@ -19,9 +19,19 @@ host = args.host or config.get('host')
 if not host:
     raise SystemExit('Add the TV address to .local/device.json or pass --host.')
 ipaddress.ip_address(host)
-sdb = ROOT / '.local/tizen-sdk/tools/sdb'
-if not sdb.exists():
-    raise SystemExit('Local SDB tool missing. See docs/development.md.')
+sdb_candidates = [
+    Path('C:/tizen-studio/tools/sdb.exe'),
+    ROOT / '.local/tizen-sdk/tools/sdb',
+    ROOT / '.local/tizen-sdk/tools/sdb.exe',
+]
+sdb = next((p for p in sdb_candidates if p.exists()), None)
+if not sdb:
+    import shutil
+    which = shutil.which('sdb')
+    if which:
+        sdb = Path(which)
+    else:
+        raise SystemExit('Local SDB tool missing. See docs/development.md.')
 manifest = XML.parse(ROOT / 'app/config.xml').getroot()
 app_id = manifest.find('{http://tizen.org/ns/widgets}application').get('id')
 

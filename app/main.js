@@ -14,15 +14,10 @@
   var FULL = 'Home holds nine apps. Remove one first.', LAST = 'Home needs one app';
 
   var PRIMARY_APPS = [
-    { id: 'stremio', name: 'Stremio', mark: true, appId: 'IkWsFHtOY9.Stremio' },
-    { id: 'netflix', name: 'Netflix', mark: true, appId: 'org.tizen.netflix-app' },
-    { id: 'disneyplus', name: 'Disney+', mark: true, appId: 'MCmYXNxgcu.DisneyPlus' },
     { id: 'youtube', name: 'YouTube', mark: true, appId: '9Ur5IzDKqV.TizenYouTube' },
-    { id: 'appletv', name: 'Apple TV', mark: true, appId: 'com.samsung.tv.aria-video' },
+    { id: 'netflix', name: 'Netflix', mark: true, appId: 'org.tizen.netflix-app' },
     { id: 'primevideo', name: 'Prime Video', mark: true, appId: 'org.tizen.primevideo' },
-    { id: 'abciview', name: 'ABC iview', mark: true, appId: 'mWK87Xghap.ABCiview' },
-    { id: 'sbs', name: 'SBS On Demand', mark: true, appId: 'OyE7OuxlUi.SBSOnDemand' },
-    { id: 'applemusic', name: 'Apple Music', mark: true, appId: 'org.tizen.apple.apple-music' }
+    { id: 'tizentube', name: 'TizenTube', mark: false, appId: 'xvvl3S1TT1.TizenTubeStandalone' }
   ];
   var PRIMARY = PRIMARY_APPS.map(function (a) { return a.id; }), APPS = PRIMARY_APPS.slice(), ALPHA = [];
   var WALLS = window.CleanFrameWallpapers || [{ id: 'misty', name: 'Misty coast', tone: 'light', ut: { tr: 'mist', br: 'mist' }, frostVeil: .20 }];
@@ -1980,10 +1975,48 @@
   norm(); render(); fit(); focusStage(); updateClock(); syncRotation();
   (function () {
     var splash = document.getElementById('splash');
+    var splashError = document.getElementById('splashError');
     if (!splash) return;
-    setTimeout(function () {
-      splash.className += ' is-done';
-      setTimeout(function () { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 700);
-    }, 1800);
+    var startAt = Date.now(), minVisibleMs = 1200, maxWaitMs = 10000, done = false;
+
+    function finish(err) {
+      if (done) return;
+      done = true;
+      if (err) {
+        splash.classList.add('is-error');
+        if (splashError) splashError.textContent = typeof err === 'string' ? err : 'Initialization took too long. Starting...';
+        setTimeout(function () {
+          splash.classList.add('is-done');
+          setTimeout(function () { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 700);
+        }, 2200);
+      } else {
+        splash.classList.add('is-ready');
+        var elapsed = Date.now() - startAt;
+        var waitRemain = Math.max(0, minVisibleMs - elapsed);
+        setTimeout(function () {
+          splash.classList.add('is-done');
+          setTimeout(function () { if (splash.parentNode) splash.parentNode.removeChild(splash); }, 700);
+        }, waitRemain + 300);
+      }
+    }
+
+    function checkReady() {
+      if (done) return;
+      if (S.lookError) {
+        finish('Failed to load display profile. Using defaults.');
+        return;
+      }
+      if (QA.ready()) {
+        finish(null);
+        return;
+      }
+      if (Date.now() - startAt > maxWaitMs) {
+        finish('Starting with default appearance...');
+        return;
+      }
+      requestAnimationFrame(checkReady);
+    }
+
+    requestAnimationFrame(checkReady);
   })();
 })();

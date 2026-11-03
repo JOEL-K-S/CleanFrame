@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 class Control {
  const string Operation="http://tizen.org/appcontrol/operation/main";
- const string Target="nClrkHome1.FrameHome";
+ const string Target="lxvKBoETTJ.HomeScreen";
  static readonly string[] Keys={"db/appfw/home_appid","db/appfw/startup_appid","db/appfw/booting_appid_backup","db/first_screen/type"};
  const string AutoKey="db/menu/smart_hub/ontvsetting/auto_start";
  [DllImport("libbundle.so.0")] static extern IntPtr bundle_create();
@@ -29,10 +29,10 @@ class Control {
  static void SetHome(string value){if(app_operation_set_current_app(Operation,value)!=0||Home()!=value)throw new Exception("Home operation write/readback failed");}
  static void Restore(Snapshot s){SetHome(s.Home);foreach(var k in Keys)SetString(k,s.Strings[k]);SetAuto(s.Autostart);}
  static void CheckSnapshot(Snapshot s){if(s==null||string.IsNullOrWhiteSpace(s.Home)||s.Strings==null||s.Strings.Count!=Keys.Length||(s.Autostart!=0&&s.Autostart!=1))throw new Exception("Invalid original snapshot");foreach(var k in Keys)if(!s.Strings.ContainsKey(k)||string.IsNullOrWhiteSpace(s.Strings[k]))throw new Exception("Missing original setting: "+k);}
- static int Main(string[] args){
+ static int Main(string[] args){ for(int i=0;i<args.Length;i++)args[i]=args[i].Trim();
   try{
    if(IntPtr.Size!=4||getuid()!=901)throw new Exception("Expected 32-bit SDK user, no root");
-   var info=File.ReadAllText("/etc/prd_info.ini");if(!info.Contains("Version=T-PTMDUABC-0090-2130.0;"))throw new Exception("Unexpected firmware");
+   var info=File.ReadAllText("/etc/prd_info.ini");if(!info.Contains("Version=T-KSU2EDUABC-0090-2130.0;"))throw new Exception("Unexpected firmware");
    if(args.Length==1&&args[0]=="query"){Console.WriteLine("CLEANFRAME_HOME_JSON="+JsonSerializer.Serialize(Query()));return 0;}
    if(args.Length!=2||(args[0]!="apply"&&args[0]!="restore"))throw new Exception("Use query, apply SNAPSHOT, or restore SNAPSHOT");
    var original=JsonSerializer.Deserialize<Snapshot>(File.ReadAllText(args[1]));CheckSnapshot(original);var before=Query();
@@ -40,7 +40,7 @@ class Control {
    if(args[0]=="restore"){Restore(original);Console.WriteLine("CLEANFRAME_HOME_RESTORED="+JsonSerializer.Serialize(Query()));return 0;}
    if(before.Home!=original.Home||before.Autostart!=original.Autostart)throw new Exception("Configuration changed since snapshot");
    foreach(var k in Keys)if(before.Strings[k]!=original.Strings[k])throw new Exception("Setting changed since snapshot: "+k);
-   if(!Directory.Exists("/opt/usr/apps/nClrkHome1")||before.BootSupported==0)throw new Exception("Installed launcher is not eligible for boot");
+   if(!Directory.Exists("/opt/usr/apps/lxvKBoETTJ")||before.BootSupported==0)throw new Exception("Installed launcher is not eligible for boot");
    try{SetHome(Target);SetString("db/appfw/home_appid",Target);SetAuto(1);Console.WriteLine("CLEANFRAME_HOME_APPLIED="+JsonSerializer.Serialize(Query()));}
    catch{Restore(original);Console.Error.WriteLine("Original Home/startup values restored after a failed apply");throw;}
    return 0;

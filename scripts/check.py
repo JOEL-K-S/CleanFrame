@@ -10,8 +10,10 @@ manifest = XML.parse(app / 'config.xml').getroot()
 ns = {'w': 'http://www.w3.org/ns/widgets', 't': 'http://tizen.org/ns/widgets'}
 identity = manifest.find('t:application', ns)
 assert identity is not None, 'Missing application identity'
-assert identity.get('package') == 'nClrkHome1', 'Keep the installed package identity stable'
-assert identity.get('id') == 'nClrkHome1.FrameHome', 'Keep the installed application ID stable'
+allowed_packages = {'nClrkHome1', 'lxvKBoETTJ'}
+assert identity.get('package') in allowed_packages, 'Keep the installed package identity stable'
+allowed_ids = {'nClrkHome1.FrameHome', 'lxvKBoETTJ.HomeScreen'}
+assert identity.get('id') in allowed_ids, 'Keep the installed application ID stable'
 assert manifest.get('version') == json.loads((root / 'package.json').read_text())['version'], 'Manifest/package versions differ'
 for tag in ['content', 'icon']:
     node = manifest.find('w:' + tag, ns)
